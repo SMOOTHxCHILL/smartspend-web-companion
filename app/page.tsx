@@ -1,30 +1,99 @@
-const categoryData = [
-  { category: "Food", amount: 12450 },
-  { category: "Groceries", amount: 8750 },
-  { category: "Fuel", amount: 5200 },
-  { category: "Shopping", amount: 4100 },
-  { category: "Bills", amount: 3200 },
-];
+"use client";
 
-const monthlyData = [
-  { month: "Apr", amount: 18200 },
-  { month: "May", amount: 21500 },
-  { month: "Jun", amount: 19800 },
-  { month: "Jul", amount: 24300 },
-  { month: "Aug", amount: 22100 },
-  { month: "Sep", amount: 23700 },
-];
+import { useEffect, useState } from "react";
 
-const totalSpent = categoryData.reduce(
-  (total, item) => total + item.amount,
-  0
-);
+type CategoryData = {
+  category: string;
+  amount: number;
+};
 
-const maxMonthlySpend = Math.max(
-  ...monthlyData.map((item) => item.amount)
-);
+type MonthlyData = {
+  month: string;
+  amount: number;
+};
+
+type SummaryData = {
+  totalSpending: number;
+  transactionCount: number;
+  averageTransaction: number;
+  categoryData: CategoryData[];
+  monthlyData: MonthlyData[];
+};
 
 export default function Home() {
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchSummary() {
+      try {
+        const response = await fetch("/api/summary");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch summary");
+        }
+
+        const data = await response.json();
+        setSummary(data);
+      } catch (error) {
+        console.error(error);
+        setError("Unable to load spending data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSummary();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-black">Dashboard</h1>
+          <p className="mt-1 text-black">
+            Overview of your spending activity.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <p className="text-black">Loading spending data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !summary) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-black">Dashboard</h1>
+          <p className="mt-1 text-black">
+            Overview of your spending activity.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-red-200 bg-white p-6">
+          <p className="text-red-600">
+            {error || "Unable to load spending data."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { totalSpending, transactionCount, averageTransaction } =
+    summary;
+
+  const categoryData = summary.categoryData;
+  const monthlyData = summary.monthlyData;
+
+  const maxMonthlySpend =
+    monthlyData.length > 0
+      ? Math.max(...monthlyData.map((item) => item.amount))
+      : 0;
+
   return (
     <div className="space-y-8">
       <div>
@@ -37,22 +106,34 @@ export default function Home() {
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <p className="text-sm font-medium text-black">Total Spending</p>
+          <p className="text-sm font-medium text-black">
+            Total Spending
+          </p>
           <p className="mt-2 text-3xl font-bold text-black">
-            ₹{totalSpent.toLocaleString("en-IN")}
+            ₹{totalSpending.toLocaleString("en-IN", {
+              maximumFractionDigits: 0,
+            })}
           </p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <p className="text-sm font-medium text-black">Transactions</p>
-          <p className="mt-2 text-3xl font-bold text-black">248</p>
+          <p className="text-sm font-medium text-black">
+            Transactions
+          </p>
+          <p className="mt-2 text-3xl font-bold text-black">
+            {transactionCount.toLocaleString("en-IN")}
+          </p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <p className="text-sm font-medium text-black">
             Average Transaction
           </p>
-          <p className="mt-2 text-3xl font-bold text-black">₹1,482</p>
+          <p className="mt-2 text-3xl font-bold text-black">
+            ₹{averageTransaction.toLocaleString("en-IN", {
+              maximumFractionDigits: 0,
+            })}
+          </p>
         </div>
       </div>
 
@@ -65,7 +146,9 @@ export default function Home() {
         <div className="mt-8 flex h-72 items-end gap-4 border-b border-gray-300 px-4">
           {monthlyData.map((item) => {
             const height =
-              (item.amount / maxMonthlySpend) * 100;
+              maxMonthlySpend > 0
+                ? (item.amount / maxMonthlySpend) * 100
+                : 0;
 
             return (
               <div
@@ -99,7 +182,9 @@ export default function Home() {
         <div className="mt-6 space-y-5">
           {categoryData.map((item) => {
             const percentage =
-              (item.amount / totalSpent) * 100;
+              totalSpending > 0
+                ? (item.amount / totalSpending) * 100
+                : 0;
 
             return (
               <div key={item.category}>
@@ -109,7 +194,9 @@ export default function Home() {
                   </span>
 
                   <span className="font-medium text-black">
-                    ₹{item.amount.toLocaleString("en-IN")}
+                    ₹{item.amount.toLocaleString("en-IN", {
+                      maximumFractionDigits: 0,
+                    })}
                   </span>
                 </div>
 

@@ -1,53 +1,107 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type ApiMerchant = {
+  id: number;
+  canonical_name: string;
+  category: string;
+  category_source: string;
+};
 
 type Merchant = {
   id: number;
   name: string;
   category: string;
-  source: "ML" | "Manual";
+  source: string;
 };
 
-const initialMerchants: Merchant[] = [
-  { id: 1, name: "Swiggy", category: "Food", source: "ML" },
-  { id: 2, name: "Zomato", category: "Food", source: "ML" },
-  { id: 3, name: "DMart", category: "Groceries", source: "ML" },
-  { id: 4, name: "Reliance Fresh", category: "Groceries", source: "Manual" },
-  { id: 5, name: "HDFC Fuel Station", category: "Fuel", source: "ML" },
-  { id: 6, name: "Amazon", category: "Shopping", source: "Manual" },
-  { id: 7, name: "Airtel", category: "Bills", source: "ML" },
-  { id: 8, name: "Uber", category: "Transport", source: "ML" },
-];
-
-const categories = [
-  "Food",
-  "Groceries",
-  "Fuel",
-  "Shopping",
-  "Bills",
-  "Transport",
-];
-
 export default function Categories() {
-  const [merchants, setMerchants] = useState(initialMerchants);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredMerchants = merchants.filter((merchant) =>
-    merchant.name.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    async function fetchMerchants() {
+      try {
+        setLoading(true);
 
-  function updateCategory(id: number, category: string) {
-    setMerchants((current) =>
-      current.map((merchant) =>
-        merchant.id === id
-          ? {
-              ...merchant,
-              category,
-              source: "Manual",
-            }
-          : merchant
-      )
+        const response = await fetch("/api/merchants");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch merchants");
+        }
+
+        const result = await response.json();
+
+        const formattedMerchants: Merchant[] =
+          result.data.map((merchant: ApiMerchant) => ({
+            id: merchant.id,
+            name: merchant.canonical_name,
+            category: merchant.category,
+            source: merchant.category_source,
+          }));
+
+        setMerchants(formattedMerchants);
+      } catch (error) {
+        console.error(error);
+        setError("Unable to load merchant data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMerchants();
+  }, []);
+
+  const categories = useMemo(() => {
+    return Array.from(
+      new Set(merchants.map((merchant) => merchant.category))
+    ).sort();
+  }, [merchants]);
+
+  const filteredMerchants = useMemo(() => {
+    return merchants.filter((merchant) =>
+      merchant.name
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+  }, [merchants, search]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Categories</h1>
+          <p className="mt-1 text-gray-500">
+            Manage merchant categories and review categorization
+            sources.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+          Loading merchants...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Categories</h1>
+          <p className="mt-1 text-gray-500">
+            Manage merchant categories and review categorization
+            sources.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-red-200 bg-white p-8 text-center text-red-600">
+          {error}
+        </div>
+      </div>
     );
   }
 
@@ -56,7 +110,8 @@ export default function Categories() {
       <div>
         <h1 className="text-3xl font-bold">Categories</h1>
         <p className="mt-1 text-gray-500">
-          Manage merchant categories and review categorization sources.
+          Manage merchant categories and review categorization
+          sources.
         </p>
       </div>
 
@@ -116,28 +171,15 @@ export default function Categories() {
                   </td>
 
                   <td className="px-6 py-4">
-                    <select
-                      value={merchant.category}
-                      onChange={(e) =>
-                        updateCategory(
-                          merchant.id,
-                          e.target.value
-                        )
-                      }
-                      className="rounded-lg border px-3 py-2 text-sm"
-                    >
-                      {categories.map((category) => (
-                        <option key={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="rounded-lg border bg-gray-50 px-3 py-2 text-sm">
+                      {merchant.category}
+                    </span>
                   </td>
 
                   <td className="px-6 py-4">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        merchant.source === "Manual"
+                        merchant.source === "manual"
                           ? "bg-gray-200 text-gray-800"
                           : "bg-gray-100 text-gray-600"
                       }`}
@@ -156,6 +198,11 @@ export default function Categories() {
             No merchants found.
           </div>
         )}
+      </div>
+
+      <div className="text-sm text-gray-500">
+        Showing {filteredMerchants.length} of{" "}
+        {merchants.length} merchants
       </div>
     </div>
   );

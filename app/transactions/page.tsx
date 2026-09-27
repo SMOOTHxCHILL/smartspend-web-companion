@@ -1,6 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type ApiTransaction = {
+  id: number;
+  bank: string;
+  amount: number;
+  type: "debit" | "credit";
+  raw_merchant: string;
+  transaction_date: string | null;
+  confidence: number;
+  merchant_id: number | null;
+  merchants:
+    | {
+        canonical_name: string;
+        category: string;
+        category_source: string;
+      }
+    | {
+        canonical_name: string;
+        category: string;
+        category_source: string;
+      }[]
+    | null;
+};
 
 type Transaction = {
   id: number;
@@ -8,71 +31,97 @@ type Transaction = {
   amount: number;
   category: string;
   date: string;
+  type: "debit" | "credit";
 };
 
-const transactions: Transaction[] = [
-  {
-    id: 1,
-    merchant: "Swiggy",
-    amount: 540,
-    category: "Food",
-    date: "2026-09-22",
-  },
-  {
-    id: 2,
-    merchant: "HDFC Fuel Station",
-    amount: 2200,
-    category: "Fuel",
-    date: "2026-09-21",
-  },
-  {
-    id: 3,
-    merchant: "DMart",
-    amount: 3850,
-    category: "Groceries",
-    date: "2026-09-20",
-  },
-  {
-    id: 4,
-    merchant: "Amazon",
-    amount: 1299,
-    category: "Shopping",
-    date: "2026-09-18",
-  },
-  {
-    id: 5,
-    merchant: "Zomato",
-    amount: 720,
-    category: "Food",
-    date: "2026-09-17",
-  },
-  {
-    id: 6,
-    merchant: "Airtel",
-    amount: 899,
-    category: "Bills",
-    date: "2026-09-15",
-  },
-  {
-    id: 7,
-    merchant: "Reliance Fresh",
-    amount: 2150,
-    category: "Groceries",
-    date: "2026-09-14",
-  },
-  {
-    id: 8,
-    merchant: "Uber",
-    amount: 460,
-    category: "Transport",
-    date: "2026-09-12",
-  },
-];
-
 export default function Transactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [sort, setSort] = useState("newest");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchTransactions() {
+      try {
+        setLoading(true);
+
+        const firstResponse = await fetch(
+          "/api/transactions?page=1&limit=100"
+        );
+
+        if (!firstResponse.ok) {
+          throw new Error("Failed to fetch transactions");
+        }
+
+        const firstResult = await firstResponse.json();
+
+        const allTransactions = [...firstResult.data];
+        const totalPages = firstResult.pagination.totalPages;
+
+        if (totalPages > 1) {
+          const remainingRequests = [];
+
+          for (let page = 2; page <= totalPages; page++) {
+            remainingRequests.push(
+              fetch(`/api/transactions?page=${page}&limit=100`)
+                .then((response) => {
+                  if (!response.ok) {
+                    throw new Error("Failed to fetch transactions");
+                  }
+
+                  return response.json();
+                })
+            );
+          }
+
+          const remainingResults = await Promise.all(
+            remainingRequests
+          );
+
+          for (const result of remainingResults) {
+            allTransactions.push(...result.data);
+          }
+        }
+
+        const formattedTransactions: Transaction[] =
+          allTransactions.map((transaction: ApiTransaction) => {
+            const merchant = Array.isArray(transaction.merchants)
+              ? transaction.merchants[0]
+              : transaction.merchants;
+
+            return {
+              id: transaction.id,
+              merchant:
+                merchant?.canonical_name ||
+                transaction.raw_merchant,
+              amount: Number(transaction.amount),
+              category: merchant?.category || "Other",
+              date: transaction.transaction_date || "",
+              type: transaction.type,
+            };
+          });
+
+        setTransactions(formattedTransactions);
+      } catch (error) {
+        console.error(error);
+        setError("Unable to load transactions.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTransactions();
+  }, []);
+
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(transactions.map((transaction) => transaction.category))
+    );
+
+    return uniqueCategories.sort();
+  }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
     let result = transactions.filter((transaction) => {
@@ -81,7 +130,8 @@ export default function Transactions() {
         .includes(search.toLowerCase());
 
       const matchesCategory =
-        category === "All" || transaction.category === category;
+        category === "All" ||
+        transaction.category === category;
 
       return matchesSearch && matchesCategory;
     });
@@ -103,7 +153,7 @@ export default function Transactions() {
     });
 
     return result;
-  }, [search, category, sort]);
+  }, [transactions, search, category, sort]);
 
   function exportCSV() {
     const headers = ["Merchant", "Category", "Date", "Amount"];
@@ -111,12 +161,18 @@ export default function Transactions() {
     const rows = filteredTransactions.map((transaction) => [
       transaction.merchant,
       transaction.category,
-      transaction.date,
+      transaction.date
+        ? new Date(transaction.date).toLocaleDateString("en-IN")
+        : "",
       transaction.amount,
     ]);
 
     const csv = [headers, ...rows]
-      .map((row) => row.join(","))
+      .map((row) =>
+        row
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",")
+      )
       .join("\n");
 
     const blob = new Blob([csv], {
@@ -131,6 +187,40 @@ export default function Transactions() {
     link.click();
 
     URL.revokeObjectURL(url);
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Transactions</h1>
+          <p className="mt-1 text-gray-500">
+            Search, filter, and explore your spending history.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+          Loading transactions...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Transactions</h1>
+          <p className="mt-1 text-gray-500">
+            Search, filter, and explore your spending history.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-red-200 bg-white p-8 text-center text-red-600">
+          {error}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -157,13 +247,13 @@ export default function Transactions() {
           onChange={(e) => setCategory(e.target.value)}
           className="rounded-lg border px-3 py-2 text-sm"
         >
-          <option>All</option>
-          <option>Food</option>
-          <option>Groceries</option>
-          <option>Fuel</option>
-          <option>Shopping</option>
-          <option>Bills</option>
-          <option>Transport</option>
+          <option value="All">All</option>
+
+          {categories.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
         </select>
 
         <select
@@ -215,9 +305,11 @@ export default function Transactions() {
                   </td>
 
                   <td className="px-6 py-4 text-gray-500">
-                    {new Date(transaction.date).toLocaleDateString(
-                      "en-IN"
-                    )}
+                    {transaction.date
+                      ? new Date(
+                          transaction.date
+                        ).toLocaleDateString("en-IN")
+                      : "-"}
                   </td>
 
                   <td className="px-6 py-4 text-right font-medium">
@@ -237,7 +329,8 @@ export default function Transactions() {
       </div>
 
       <div className="text-sm text-gray-500">
-        Showing {filteredTransactions.length} transactions
+        Showing {filteredTransactions.length} of{" "}
+        {transactions.length} transactions
       </div>
     </div>
   );
