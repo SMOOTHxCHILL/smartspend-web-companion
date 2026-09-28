@@ -39,7 +39,7 @@ export default function Chat() {
     setQuestion("");
   }
 
-  function useSuggestedQuestion(question: string) {
+  function selectSuggestedQuestion(question: string) {
     setQuestion(question);
   }
 
@@ -58,7 +58,7 @@ export default function Chat() {
           {suggestedQuestions.map((suggestion) => (
             <button
               key={suggestion}
-              onClick={() => useSuggestedQuestion(suggestion)}
+              onClick={() => selectSuggestedQuestion(suggestion)}
               className="rounded-xl border bg-white p-4 text-left text-sm hover:bg-gray-50"
             >
               {suggestion}
