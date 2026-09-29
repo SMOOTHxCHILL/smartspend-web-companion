@@ -57,7 +57,9 @@ export default function Categories() {
 
   const categories = useMemo(() => {
     return Array.from(
-      new Set(merchants.map((merchant) => merchant.category))
+      new Set(
+        merchants.map((merchant) => merchant.category)
+      )
     ).sort();
   }, [merchants]);
 
@@ -73,14 +75,17 @@ export default function Categories() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Categories</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Categories
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Manage merchant categories and review categorization
             sources.
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-zinc-600">
           Loading merchants...
         </div>
       </div>
@@ -91,8 +96,11 @@ export default function Categories() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Categories</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Categories
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Manage merchant categories and review categorization
             sources.
           </p>
@@ -108,8 +116,11 @@ export default function Categories() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Categories</h1>
-        <p className="mt-1 text-gray-500">
+        <h1 className="text-3xl font-bold text-white">
+          Categories
+        </h1>
+
+        <p className="mt-1 text-zinc-400">
           Manage merchant categories and review categorization
           sources.
         </p>
@@ -125,36 +136,50 @@ export default function Categories() {
           return (
             <div
               key={category}
-              className="rounded-xl border bg-white p-5"
+              className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <p className="text-sm text-gray-500">{category}</p>
-              <p className="mt-1 text-2xl font-bold">{count}</p>
-              <p className="text-xs text-gray-400">merchants</p>
+              <p className="text-sm font-medium text-zinc-500">
+                {category}
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-zinc-950">
+                {count}
+              </p>
+
+              <p className="text-xs text-zinc-400">
+                merchants
+              </p>
             </div>
           );
         })}
       </div>
 
       {/* Search */}
-      <div className="rounded-xl border bg-white p-4">
+      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
         <input
           type="text"
           placeholder="Search merchants..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black placeholder:text-zinc-500 outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
         />
       </div>
 
       {/* Merchant table */}
-      <div className="overflow-hidden rounded-xl border bg-white">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b bg-gray-50 text-gray-500">
+          <table className="w-full text-left text-sm text-zinc-900">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-700">
               <tr>
-                <th className="px-6 py-4 font-medium">Merchant</th>
-                <th className="px-6 py-4 font-medium">Category</th>
-                <th className="px-6 py-4 font-medium">
+                <th className="px-6 py-4 font-semibold">
+                  Merchant
+                </th>
+
+                <th className="px-6 py-4 font-semibold">
+                  Category
+                </th>
+
+                <th className="px-6 py-4 font-semibold">
                   Category Source
                 </th>
               </tr>
@@ -164,14 +189,14 @@ export default function Categories() {
               {filteredMerchants.map((merchant) => (
                 <tr
                   key={merchant.id}
-                  className="border-b last:border-0 hover:bg-gray-50"
+                  className="border-b border-zinc-100 transition-colors last:border-0 hover:bg-zinc-50"
                 >
-                  <td className="px-6 py-4 font-medium">
+                  <td className="px-6 py-4 font-medium text-zinc-950">
                     {merchant.name}
                   </td>
 
                   <td className="px-6 py-4">
-                    <span className="rounded-lg border bg-gray-50 px-3 py-2 text-sm">
+                    <span className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
                       {merchant.category}
                     </span>
                   </td>
@@ -180,8 +205,8 @@ export default function Categories() {
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                         merchant.source === "manual"
-                          ? "bg-gray-200 text-gray-800"
-                          : "bg-gray-100 text-gray-600"
+                          ? "bg-zinc-200 text-zinc-800"
+                          : "bg-zinc-100 text-zinc-600"
                       }`}
                     >
                       {merchant.source}
@@ -194,13 +219,13 @@ export default function Categories() {
         </div>
 
         {filteredMerchants.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-zinc-500">
             No merchants found.
           </div>
         )}
       </div>
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-zinc-400">
         Showing {filteredMerchants.length} of{" "}
         {merchants.length} merchants
       </div>

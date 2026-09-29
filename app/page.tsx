@@ -51,8 +51,8 @@ export default function Home() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-black">Dashboard</h1>
-          <p className="mt-1 text-black">
+          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <p className="mt-1 text-zinc-400">
             Overview of your spending activity.
           </p>
         </div>
@@ -68,8 +68,8 @@ export default function Home() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-black">Dashboard</h1>
-          <p className="mt-1 text-black">
+          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <p className="mt-1 text-zinc-400">
             Overview of your spending activity.
           </p>
         </div>
@@ -83,8 +83,7 @@ export default function Home() {
     );
   }
 
-  const { totalSpending, transactionCount, averageTransaction } =
-    summary;
+  const { totalSpending, transactionCount, averageTransaction } = summary;
 
   const categoryData = summary.categoryData;
   const monthlyData = summary.monthlyData;
@@ -96,9 +95,10 @@ export default function Home() {
 
   return (
     <div className="space-y-8">
+      {/* Page heading */}
       <div>
-        <h1 className="text-3xl font-bold text-black">Dashboard</h1>
-        <p className="mt-1 text-black">
+        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+        <p className="mt-1 text-zinc-400">
           Overview of your spending activity.
         </p>
       </div>
@@ -106,20 +106,19 @@ export default function Home() {
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <p className="text-sm font-medium text-black">
-            Total Spending
-          </p>
+          <p className="text-sm font-medium text-black">Total Spending</p>
+
           <p className="mt-2 text-3xl font-bold text-black">
-            ₹{totalSpending.toLocaleString("en-IN", {
+            ₹
+            {totalSpending.toLocaleString("en-IN", {
               maximumFractionDigits: 0,
             })}
           </p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <p className="text-sm font-medium text-black">
-            Transactions
-          </p>
+          <p className="text-sm font-medium text-black">Transactions</p>
+
           <p className="mt-2 text-3xl font-bold text-black">
             {transactionCount.toLocaleString("en-IN")}
           </p>
@@ -129,8 +128,10 @@ export default function Home() {
           <p className="text-sm font-medium text-black">
             Average Transaction
           </p>
+
           <p className="mt-2 text-3xl font-bold text-black">
-            ₹{averageTransaction.toLocaleString("en-IN", {
+            ₹
+            {averageTransaction.toLocaleString("en-IN", {
               maximumFractionDigits: 0,
             })}
           </p>
@@ -194,7 +195,8 @@ export default function Home() {
                   </span>
 
                   <span className="font-medium text-black">
-                    ₹{item.amount.toLocaleString("en-IN", {
+                    ₹
+                    {item.amount.toLocaleString("en-IN", {
                       maximumFractionDigits: 0,
                     })}
                   </span>

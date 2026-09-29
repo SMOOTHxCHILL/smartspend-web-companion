@@ -65,20 +65,19 @@ export default function Transactions() {
 
           for (let page = 2; page <= totalPages; page++) {
             remainingRequests.push(
-              fetch(`/api/transactions?page=${page}&limit=100`)
-                .then((response) => {
+              fetch(`/api/transactions?page=${page}&limit=100`).then(
+                (response) => {
                   if (!response.ok) {
                     throw new Error("Failed to fetch transactions");
                   }
 
                   return response.json();
-                })
+                }
+              )
             );
           }
 
-          const remainingResults = await Promise.all(
-            remainingRequests
-          );
+          const remainingResults = await Promise.all(remainingRequests);
 
           for (const result of remainingResults) {
             allTransactions.push(...result.data);
@@ -117,7 +116,11 @@ export default function Transactions() {
 
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
-      new Set(transactions.map((transaction) => transaction.category))
+      new Set(
+        transactions.map(
+          (transaction) => transaction.category
+        )
+      )
     );
 
     return uniqueCategories.sort();
@@ -162,7 +165,9 @@ export default function Transactions() {
       transaction.merchant,
       transaction.category,
       transaction.date
-        ? new Date(transaction.date).toLocaleDateString("en-IN")
+        ? new Date(
+            transaction.date
+          ).toLocaleDateString("en-IN")
         : "",
       transaction.amount,
     ]);
@@ -170,7 +175,9 @@ export default function Transactions() {
     const csv = [headers, ...rows]
       .map((row) =>
         row
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .map((value) =>
+            `"${String(value).replace(/"/g, '""')}"`
+          )
           .join(",")
       )
       .join("\n");
@@ -193,13 +200,16 @@ export default function Transactions() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Transactions
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Search, filter, and explore your spending history.
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-zinc-600">
           Loading transactions...
         </div>
       </div>
@@ -210,8 +220,11 @@ export default function Transactions() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Transactions
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Search, filter, and explore your spending history.
           </p>
         </div>
@@ -226,26 +239,29 @@ export default function Transactions() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Transactions</h1>
-        <p className="mt-1 text-gray-500">
+        <h1 className="text-3xl font-bold text-white">
+          Transactions
+        </h1>
+
+        <p className="mt-1 text-zinc-400">
           Search, filter, and explore your spending history.
         </p>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row">
+      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 md:flex-row">
         <input
           type="text"
           placeholder="Search merchant..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black placeholder:text-zinc-500 outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
         />
 
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
         >
           <option value="All">All</option>
 
@@ -259,7 +275,7 @@ export default function Transactions() {
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
         >
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
@@ -269,22 +285,31 @@ export default function Transactions() {
 
         <button
           onClick={exportCSV}
-          className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+          className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 active:scale-[0.98]"
         >
           Export CSV
         </button>
       </div>
 
       {/* Transaction table */}
-      <div className="overflow-hidden rounded-xl border bg-white">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b bg-gray-50 text-gray-500">
+          <table className="w-full text-left text-sm text-zinc-900">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-700">
               <tr>
-                <th className="px-6 py-4 font-medium">Merchant</th>
-                <th className="px-6 py-4 font-medium">Category</th>
-                <th className="px-6 py-4 font-medium">Date</th>
-                <th className="px-6 py-4 text-right font-medium">
+                <th className="px-6 py-4 font-semibold">
+                  Merchant
+                </th>
+
+                <th className="px-6 py-4 font-semibold">
+                  Category
+                </th>
+
+                <th className="px-6 py-4 font-semibold">
+                  Date
+                </th>
+
+                <th className="px-6 py-4 text-right font-semibold">
                   Amount
                 </th>
               </tr>
@@ -294,17 +319,17 @@ export default function Transactions() {
               {filteredTransactions.map((transaction) => (
                 <tr
                   key={transaction.id}
-                  className="border-b last:border-0 hover:bg-gray-50"
+                  className="border-b border-zinc-100 transition-colors last:border-0 hover:bg-zinc-50"
                 >
-                  <td className="px-6 py-4 font-medium">
+                  <td className="px-6 py-4 font-medium text-zinc-950">
                     {transaction.merchant}
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-zinc-700">
                     {transaction.category}
                   </td>
 
-                  <td className="px-6 py-4 text-gray-500">
+                  <td className="px-6 py-4 text-zinc-500">
                     {transaction.date
                       ? new Date(
                           transaction.date
@@ -312,7 +337,7 @@ export default function Transactions() {
                       : "-"}
                   </td>
 
-                  <td className="px-6 py-4 text-right font-medium">
+                  <td className="px-6 py-4 text-right font-semibold text-zinc-950">
                     ₹{transaction.amount.toLocaleString("en-IN")}
                   </td>
                 </tr>
@@ -322,13 +347,13 @@ export default function Transactions() {
         </div>
 
         {filteredTransactions.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-zinc-500">
             No transactions found.
           </div>
         )}
       </div>
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-zinc-400">
         Showing {filteredTransactions.length} of{" "}
         {transactions.length} transactions
       </div>

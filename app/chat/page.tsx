@@ -127,9 +127,13 @@ export default function Chat() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Ask SmartSpend</h1>
-        <p className="mt-1 text-gray-500">
+        <h1 className="text-3xl font-bold text-white">
+          Ask SmartSpend
+        </h1>
+
+        <p className="mt-1 text-zinc-400">
           Ask questions about your spending using natural language.
         </p>
       </div>
@@ -141,7 +145,7 @@ export default function Chat() {
             <button
               key={suggestion}
               onClick={() => selectSuggestedQuestion(suggestion)}
-              className="rounded-xl border bg-white p-4 text-left text-sm hover:bg-gray-50"
+              className="rounded-xl border border-zinc-200 bg-white p-4 text-left text-sm font-medium text-zinc-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-md"
             >
               {suggestion}
             </button>
@@ -151,7 +155,7 @@ export default function Chat() {
 
       {/* Conversation */}
       {messages.length > 0 && (
-        <div className="space-y-4 rounded-xl border bg-white p-6">
+        <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           {messages.map((message, index) => (
             <div
               key={index}
@@ -163,10 +167,10 @@ export default function Chat() {
             >
               <div className="max-w-[85%]">
                 <div
-                  className={`rounded-xl px-4 py-3 text-sm ${
+                  className={`rounded-xl px-4 py-3 text-sm leading-6 ${
                     message.role === "user"
                       ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-900"
+                      : "bg-zinc-100 text-zinc-900"
                   }`}
                 >
                   {message.content}
@@ -176,24 +180,26 @@ export default function Chat() {
                 {message.role === "assistant" &&
                   message.route === "sql" &&
                   message.data && (
-                    <div className="mt-2 rounded-lg border bg-white p-3 text-xs text-gray-600">
-                      <div className="mb-2 font-medium text-gray-900">
+                    <div className="mt-2 rounded-lg border border-zinc-200 bg-white p-4 text-xs text-zinc-600 shadow-sm">
+                      <div className="mb-3 font-semibold text-zinc-950">
                         Calculated from transaction data
                       </div>
 
                       {message.data.totalSpent !== undefined && (
                         <div>
                           Total:{" "}
-                          <span className="font-medium text-gray-900">
-                            {formatCurrency(message.data.totalSpent)}
+                          <span className="font-semibold text-zinc-950">
+                            {formatCurrency(
+                              message.data.totalSpent
+                            )}
                           </span>
                         </div>
                       )}
 
                       {message.data.transactionCount !== undefined && (
-                        <div>
+                        <div className="mt-1">
                           Transactions:{" "}
-                          <span className="font-medium text-gray-900">
+                          <span className="font-semibold text-zinc-950">
                             {message.data.transactionCount}
                           </span>
                         </div>
@@ -201,32 +207,44 @@ export default function Chat() {
 
                       {message.data.categories &&
                         message.data.categories.length > 0 && (
-                          <div className="mt-3 space-y-1">
-                            {message.data.categories.map((category) => (
-                              <div
-                                key={category.category}
-                                className="flex justify-between gap-4"
-                              >
-                                <span>{category.category}</span>
-                                <span className="font-medium">
-                                  {formatCurrency(category.totalSpent)}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="mt-4 space-y-2 border-t border-zinc-100 pt-3">
+                            {message.data.categories.map(
+                              (category) => (
+                                <div
+                                  key={category.category}
+                                  className="flex justify-between gap-4"
+                                >
+                                  <span className="text-zinc-600">
+                                    {category.category}
+                                  </span>
+
+                                  <span className="font-semibold text-zinc-950">
+                                    {formatCurrency(
+                                      category.totalSpent
+                                    )}
+                                  </span>
+                                </div>
+                              )
+                            )}
                           </div>
                         )}
 
                       {message.data.months &&
                         message.data.months.length > 0 && (
-                          <div className="mt-3 space-y-1">
+                          <div className="mt-4 space-y-2 border-t border-zinc-100 pt-3">
                             {message.data.months.map((month) => (
                               <div
                                 key={month.month}
                                 className="flex justify-between gap-4"
                               >
-                                <span>{month.month}</span>
-                                <span className="font-medium">
-                                  {formatCurrency(month.totalSpent)}
+                                <span className="text-zinc-600">
+                                  {month.month}
+                                </span>
+
+                                <span className="font-semibold text-zinc-950">
+                                  {formatCurrency(
+                                    month.totalSpent
+                                  )}
                                 </span>
                               </div>
                             ))}
@@ -240,8 +258,8 @@ export default function Chat() {
                   message.route === "rag" &&
                   message.sources &&
                   message.sources.length > 0 && (
-                    <div className="mt-2 rounded-lg border bg-white p-3 text-xs">
-                      <div className="mb-2 font-medium text-gray-900">
+                    <div className="mt-2 rounded-lg border border-zinc-200 bg-white p-4 text-xs shadow-sm">
+                      <div className="mb-3 font-semibold text-zinc-950">
                         Related transactions
                       </div>
 
@@ -249,7 +267,7 @@ export default function Chat() {
                         {message.sources.map((source) => (
                           <div
                             key={source.transaction_id}
-                            className="rounded-md bg-gray-50 p-2 text-gray-600"
+                            className="rounded-md border border-zinc-100 bg-zinc-50 p-3 text-zinc-600"
                           >
                             {source.content}
                           </div>
@@ -263,7 +281,7 @@ export default function Chat() {
 
           {loading && (
             <div className="flex justify-start">
-              <div className="rounded-xl bg-gray-100 px-4 py-3 text-sm text-gray-500">
+              <div className="rounded-xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500">
                 Analyzing your transactions...
               </div>
             </div>
@@ -272,7 +290,7 @@ export default function Chat() {
       )}
 
       {/* Input */}
-      <div className="rounded-xl border bg-white p-4">
+      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="flex gap-3">
           <input
             type="text"
@@ -285,13 +303,13 @@ export default function Chat() {
             }}
             placeholder="Ask about your spending..."
             disabled={loading}
-            className="flex-1 rounded-lg border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-300 disabled:bg-gray-50"
+            className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-black placeholder:text-zinc-500 outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400"
           />
 
           <button
             onClick={() => askQuestion()}
             disabled={!question.trim() || loading}
-            className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? "..." : "Ask"}
           </button>

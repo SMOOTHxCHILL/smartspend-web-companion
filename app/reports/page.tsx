@@ -81,13 +81,16 @@ export default function Reports() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Reports
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Analyze your spending across months and categories.
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-zinc-600 shadow-sm">
           Loading reports...
         </div>
       </div>
@@ -98,13 +101,16 @@ export default function Reports() {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-3xl font-bold text-white">
+            Reports
+          </h1>
+
+          <p className="mt-1 text-zinc-400">
             Analyze your spending across months and categories.
           </p>
         </div>
 
-        <div className="rounded-xl border border-red-200 bg-white p-8 text-center text-red-600">
+        <div className="rounded-xl border border-red-200 bg-white p-8 text-center text-red-600 shadow-sm">
           {error || "Unable to load report data."}
         </div>
       </div>
@@ -113,45 +119,51 @@ export default function Reports() {
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Reports</h1>
-        <p className="mt-1 text-gray-500">
+        <h1 className="text-3xl font-bold text-white">
+          Reports
+        </h1>
+
+        <p className="mt-1 text-zinc-400">
           Analyze your spending across months and categories.
         </p>
       </div>
 
       {/* Summary */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border bg-white p-6">
-          <p className="text-sm text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <p className="text-sm font-medium text-zinc-500">
             Total Spending
           </p>
 
-          <p className="mt-2 text-3xl font-bold">
-            ₹{totalSpent.toLocaleString("en-IN", {
+          <p className="mt-2 text-3xl font-bold text-zinc-950">
+            ₹
+            {totalSpent.toLocaleString("en-IN", {
               maximumFractionDigits: 0,
             })}
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-6">
-          <p className="text-sm text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <p className="text-sm font-medium text-zinc-500">
             Current Month
           </p>
 
-          <p className="mt-2 text-3xl font-bold">
-            ₹{currentMonth.toLocaleString("en-IN", {
+          <p className="mt-2 text-3xl font-bold text-zinc-950">
+            ₹
+            {currentMonth.toLocaleString("en-IN", {
               maximumFractionDigits: 0,
             })}
           </p>
         </div>
 
-        <div className="rounded-xl border bg-white p-6">
-          <p className="text-sm text-gray-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <p className="text-sm font-medium text-zinc-500">
             Month-over-Month
           </p>
 
-          <p className="mt-2 text-3xl font-bold">
+          <p className="mt-2 text-3xl font-bold text-zinc-950">
             {monthChange >= 0 ? "+" : ""}
             {monthChange.toFixed(1)}%
           </p>
@@ -159,13 +171,17 @@ export default function Reports() {
       </div>
 
       {/* Monthly spending */}
-      <div className="rounded-xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-zinc-950">
           Monthly Spending
         </h2>
 
+        <p className="mt-1 text-sm text-zinc-500">
+          Spending by month across your transaction history.
+        </p>
+
         {monthlyData.length > 0 ? (
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-5">
             {monthlyData.map((month) => {
               const width =
                 maxMonthlySpend > 0
@@ -174,19 +190,22 @@ export default function Reports() {
 
               return (
                 <div key={month.month}>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span>{month.month}</span>
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span className="font-medium text-zinc-700">
+                      {month.month}
+                    </span>
 
-                    <span className="font-medium">
-                      ₹{month.amount.toLocaleString("en-IN", {
+                    <span className="font-semibold text-zinc-950">
+                      ₹
+                      {month.amount.toLocaleString("en-IN", {
                         maximumFractionDigits: 0,
                       })}
                     </span>
                   </div>
 
-                  <div className="h-3 rounded-full bg-gray-100">
+                  <div className="h-3 overflow-hidden rounded-full bg-zinc-100">
                     <div
-                      className="h-3 rounded-full bg-black"
+                      className="h-3 rounded-full bg-black transition-all duration-500"
                       style={{
                         width: `${width}%`,
                       }}
@@ -197,37 +216,42 @@ export default function Reports() {
             })}
           </div>
         ) : (
-          <p className="mt-6 text-sm text-gray-500">
+          <p className="mt-6 text-sm text-zinc-500">
             No monthly spending data available.
           </p>
         )}
       </div>
 
       {/* Top categories */}
-      <div className="rounded-xl border bg-white p-6">
-        <h2 className="text-lg font-semibold">
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-zinc-950">
           Top Categories
         </h2>
+
+        <p className="mt-1 text-sm text-zinc-500">
+          Categories ranked by total spending.
+        </p>
 
         {categoryData.length > 0 ? (
           <div className="mt-6 space-y-4">
             {categoryData.map((category, index) => (
               <div
                 key={category.category}
-                className="flex items-center justify-between border-b pb-4 last:border-0"
+                className="flex items-center justify-between border-b border-zinc-100 pb-4 last:border-0 last:pb-0"
               >
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-400">
+                  <span className="w-8 text-sm font-medium text-zinc-400">
                     #{index + 1}
                   </span>
 
-                  <span className="font-medium">
+                  <span className="font-medium text-zinc-900">
                     {category.category}
                   </span>
                 </div>
 
-                <span className="font-medium">
-                  ₹{category.amount.toLocaleString("en-IN", {
+                <span className="font-semibold text-zinc-950">
+                  ₹
+                  {category.amount.toLocaleString("en-IN", {
                     maximumFractionDigits: 0,
                   })}
                 </span>
@@ -235,7 +259,7 @@ export default function Reports() {
             ))}
           </div>
         ) : (
-          <p className="mt-6 text-sm text-gray-500">
+          <p className="mt-6 text-sm text-zinc-500">
             No category data available.
           </p>
         )}
