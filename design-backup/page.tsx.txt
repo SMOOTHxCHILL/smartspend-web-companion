@@ -1,0 +1,837 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { animate } from "animejs";
+import { motion } from "motion/react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+type CategoryData = {
+  category: string;
+  amount: number;
+};
+
+type MonthlyData = {
+  month: string;
+  amount: number;
+};
+
+type SummaryData = {
+  totalSpending: number;
+  transactionCount: number;
+  averageTransaction: number;
+  categoryData: CategoryData[];
+  monthlyData: MonthlyData[];
+};
+
+const categoryColors = [
+  "#7c5cff",
+  "#4f8cff",
+  "#34d399",
+  "#f5b942",
+  "#fb7185",
+  "#a78bfa",
+  "#22d3ee",
+  "#f472b6",
+];
+
+const currency = (value: number, decimals = 0) =>
+  `₹${value.toLocaleString("en-IN", {
+    maximumFractionDigits: decimals,
+  })}`;
+
+const compactCurrency = (value: number) => {
+  if (value >= 100000) {
+    return `₹${(value / 100000).toFixed(1)}L`;
+  }
+
+  if (value >= 1000) {
+    return `₹${(value / 1000).toFixed(1)}k`;
+  }
+
+  return currency(value);
+};
+
+function formatMonth(month: string) {
+  const [year, monthNumber] = month.split("-");
+
+  if (!year || !monthNumber) {
+    return month;
+  }
+
+  const date = new Date(Number(year), Number(monthNumber) - 1);
+
+  return date.toLocaleDateString("en-IN", {
+    month: "short",
+  });
+}
+
+function formatMonthFull(month: string) {
+  const [year, monthNumber] = month.split("-");
+
+  if (!year || !monthNumber) {
+    return month;
+  }
+
+  const date = new Date(Number(year), Number(monthNumber) - 1);
+
+  return date.toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/* ---------------------------------------------------------
+   Anime.js animated number
+--------------------------------------------------------- */
+
+function AnimatedNumber({
+  value,
+  formatter,
+  delay = 0,
+}: {
+  value: number;
+  formatter: (value: number) => string;
+  delay?: number;
+}) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+
+  useEffect(() => {
+    const animatedValue = {
+      value: 0,
+    };
+
+    animationRef.current?.pause();
+
+    animationRef.current = animate(animatedValue, {
+      value,
+      duration: 1800,
+      delay,
+      ease: "outExpo",
+      onUpdate: () => {
+        setDisplayValue(animatedValue.value);
+      },
+    });
+
+    return () => {
+      animationRef.current?.pause();
+    };
+  }, [value, delay]);
+
+  return <>{formatter(displayValue)}</>;
+}
+
+/* ---------------------------------------------------------
+   KPI card
+--------------------------------------------------------- */
+
+function StatCard({
+  label,
+  value,
+  formatter,
+  detail,
+  accent,
+  delay,
+}: {
+  label: string;
+  value: number;
+  formatter: (value: number) => string;
+  detail: string;
+  accent: string;
+  delay: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay }}
+      whileHover={{ y: -4 }}
+      className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d1018] p-6 shadow-2xl shadow-black/20"
+    >
+      <div
+        className="absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-20 blur-3xl transition-opacity duration-300 group-hover:opacity-40"
+        style={{ background: accent }}
+      />
+
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-400">{label}</p>
+
+          <div
+            className="h-2.5 w-2.5 rounded-full shadow-lg"
+            style={{
+              background: accent,
+              boxShadow: `0 0 18px ${accent}`,
+            }}
+          />
+        </div>
+
+        <p className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <AnimatedNumber
+            value={value}
+            formatter={formatter}
+            delay={delay * 1000}
+          />
+        </p>
+
+        <p className="mt-2 text-sm text-slate-500">{detail}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Chart tooltip
+--------------------------------------------------------- */
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-[#111520]/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+      <p className="text-xs font-medium text-slate-400">
+        {label ? formatMonthFull(label) : ""}
+      </p>
+
+      <p className="mt-1 text-lg font-semibold text-white">
+        {currency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+export default function Home() {
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  /* -------------------------------------------------------
+     Interactive donut state
+  ------------------------------------------------------- */
+
+  const [activeCategory, setActiveCategory] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function fetchSummary() {
+      try {
+        const response = await fetch("/api/summary");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch summary");
+        }
+
+        const data = await response.json();
+        setSummary(data);
+      } catch (error) {
+        console.error(error);
+        setError("Unable to load spending data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSummary();
+  }, []);
+
+  const insights = useMemo(() => {
+    if (!summary) {
+      return null;
+    }
+
+    const sortedCategories = [...summary.categoryData].sort(
+      (a, b) => b.amount - a.amount,
+    );
+
+    const topCategory = sortedCategories[0];
+
+    const monthly = summary.monthlyData;
+
+    const latestMonth = monthly[monthly.length - 1];
+    const previousMonth = monthly[monthly.length - 2];
+
+    let monthlyChange = 0;
+
+    if (latestMonth && previousMonth && previousMonth.amount > 0) {
+      monthlyChange =
+        ((latestMonth.amount - previousMonth.amount) /
+          previousMonth.amount) *
+        100;
+    }
+
+    return {
+      topCategory,
+      latestMonth,
+      previousMonth,
+      monthlyChange,
+    };
+  }, [summary]);
+
+  if (loading) {
+    return (
+      <div className="min-h-[70vh]">
+        <div className="animate-pulse space-y-8">
+          <div className="h-10 w-72 rounded-lg bg-white/10" />
+          <div className="h-5 w-96 rounded bg-white/5" />
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="h-36 rounded-2xl bg-white/5" />
+            <div className="h-36 rounded-2xl bg-white/5" />
+            <div className="h-36 rounded-2xl bg-white/5" />
+          </div>
+
+          <div className="h-[460px] rounded-2xl bg-white/5" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !summary) {
+    return (
+      <div className="rounded-2xl border border-red-400/20 bg-red-400/5 p-6">
+        <p className="font-medium text-red-300">
+          {error || "Unable to load spending data."}
+        </p>
+      </div>
+    );
+  }
+
+  const { totalSpending, transactionCount, averageTransaction } = summary;
+
+  const latestMonth = insights?.latestMonth;
+  const previousMonth = insights?.previousMonth;
+  const monthlyChange = insights?.monthlyChange ?? 0;
+
+  const changePositive = monthlyChange >= 0;
+
+  const chartData = summary.monthlyData.map((item) => ({
+    ...item,
+    displayMonth: formatMonth(item.month),
+  }));
+
+  const categoryData = summary.categoryData.map((item, index) => ({
+    ...item,
+    fill: categoryColors[index % categoryColors.length],
+  }));
+
+  const topCategory = insights?.topCategory;
+
+  const topCategoryPercentage =
+    topCategory && totalSpending > 0
+      ? (topCategory.amount / totalSpending) * 100
+      : 0;
+
+  const selectedCategory =
+    activeCategory !== null ? categoryData[activeCategory] : null;
+
+  const selectedPercentage =
+    selectedCategory && totalSpending > 0
+      ? (selectedCategory.amount / totalSpending) * 100
+      : 0;
+
+  return (
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Atmospheric background */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-[5%] top-[5%] h-[500px] w-[500px] rounded-full bg-[#7c5cff]/10 blur-[140px]" />
+
+        <div className="absolute right-[-5%] top-[15%] h-[600px] w-[600px] rounded-full bg-[#4f8cff]/10 blur-[160px]" />
+
+        <div className="absolute bottom-[5%] left-[35%] h-[500px] w-[700px] rounded-full bg-[#7c5cff]/5 blur-[180px]" />
+
+        <svg
+          className="absolute inset-0 h-full w-full opacity-[0.035]"
+          viewBox="0 0 1440 900"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient
+              id="ambientGradient"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <stop offset="0%" stopColor="#7c5cff" />
+              <stop offset="50%" stopColor="#4f8cff" />
+              <stop offset="100%" stopColor="#34d399" />
+            </linearGradient>
+          </defs>
+
+          <path
+            fill="url(#ambientGradient)"
+            d="M0,180 C220,60 360,280 590,190 C820,100 930,20 1160,130 C1300,195 1380,130 1440,80 L1440,0 L0,0 Z"
+          />
+
+          <path
+            fill="url(#ambientGradient)"
+            d="M0,760 C240,650 390,810 620,720 C850,630 1010,760 1210,680 C1330,630 1380,680 1440,620 L1440,900 L0,900 Z"
+          />
+        </svg>
+
+        <div
+          className="absolute inset-0 opacity-[0.025]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
+        />
+      </div>
+
+      <div className="relative space-y-8 pb-12">
+        {/* Hero */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0d1018] px-6 py-8 shadow-2xl shadow-black/20 sm:px-8 sm:py-10"
+        >
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-[#7c5cff]/20 blur-[100px]" />
+
+          <div className="pointer-events-none absolute -bottom-40 left-1/3 h-80 w-80 rounded-full bg-[#4f8cff]/10 blur-[100px]" />
+
+          <div className="relative flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#7c5cff]/20 bg-[#7c5cff]/10 px-3 py-1.5 text-xs font-medium text-[#b5a7ff]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#7c5cff] shadow-[0_0_10px_#7c5cff]" />
+                Personal spending analytics
+              </div>
+
+              <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+                Your money,
+                <span className="bg-gradient-to-r from-[#9b82ff] via-[#7c5cff] to-[#4f8cff] bg-clip-text text-transparent">
+                  {" "}
+                  visualized.
+                </span>
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-400">
+                Understand where your money is going across{" "}
+                <span className="font-medium text-slate-200">
+                  {transactionCount.toLocaleString("en-IN")} transactions
+                </span>
+                , with your spending patterns organized automatically.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]" />
+              </span>
+
+              <div>
+                <p className="text-xs font-medium text-slate-500">
+                  Data status
+                </p>
+                <p className="text-sm font-semibold text-white">Synced</p>
+              </div>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* KPI cards */}
+        <section className="grid gap-4 md:grid-cols-3">
+          <StatCard
+            label="Total Spending"
+            value={totalSpending}
+            formatter={(value) => currency(value)}
+            detail="Across all recorded transactions"
+            accent="#7c5cff"
+            delay={0.08}
+          />
+
+          <StatCard
+            label="Transactions"
+            value={transactionCount}
+            formatter={(value) =>
+              Math.round(value).toLocaleString("en-IN")
+            }
+            detail="Recorded spending activity"
+            accent="#4f8cff"
+            delay={0.16}
+          />
+
+          <StatCard
+            label="Average Transaction"
+            value={averageTransaction}
+            formatter={(value) => currency(value)}
+            detail="Average amount per transaction"
+            accent="#34d399"
+            delay={0.24}
+          />
+        </section>
+
+        {/* Main analytics */}
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.75fr)]">
+          {/* Spending trend */}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.3 }}
+            className="rounded-3xl border border-white/[0.08] bg-[#0d1018] p-5 shadow-2xl shadow-black/20 sm:p-7"
+          >
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div>
+                <p className="text-sm font-medium text-slate-400">
+                  Spending overview
+                </p>
+
+                <h2 className="mt-1 text-2xl font-bold text-white">
+                  Monthly spending
+                </h2>
+              </div>
+
+              {latestMonth && (
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-slate-500">
+                    {formatMonthFull(latestMonth.month)}
+                  </p>
+
+                  <p className="mt-1 text-xl font-bold text-white">
+                    {currency(latestMonth.amount)}
+                  </p>
+
+                  {previousMonth && (
+                    <p
+                      className={`mt-1 text-xs font-medium ${
+                        changePositive
+                          ? "text-rose-400"
+                          : "text-emerald-400"
+                      }`}
+                    >
+                      {changePositive ? "↑" : "↓"}{" "}
+                      {Math.abs(monthlyChange).toFixed(1)}% vs previous month
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 h-[330px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 15, right: 5, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="spendingGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="#7c5cff"
+                        stopOpacity={0.5}
+                      />
+
+                      <stop
+                        offset="65%"
+                        stopColor="#7c5cff"
+                        stopOpacity={0.12}
+                      />
+
+                      <stop
+                        offset="100%"
+                        stopColor="#7c5cff"
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid
+                    vertical={false}
+                    stroke="rgba(255,255,255,0.06)"
+                  />
+
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={formatMonthFull}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fill: "#64748b",
+                      fontSize: 12,
+                    }}
+                    dy={10}
+                  />
+
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fill: "#64748b",
+                      fontSize: 11,
+                    }}
+                    tickFormatter={compactCurrency}
+                  />
+
+                  <Tooltip
+                    content={<ChartTooltip />}
+                    cursor={{
+                      stroke: "rgba(155,130,255,0.35)",
+                      strokeWidth: 1,
+                    }}
+                  />
+
+                  <Area
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="#9b82ff"
+                    strokeWidth={3}
+                    fill="url(#spendingGradient)"
+                    dot={{
+                      r: 3,
+                      fill: "#9b82ff",
+                      stroke: "#0d1018",
+                      strokeWidth: 2,
+                    }}
+                    activeDot={{
+                      r: 6,
+                      fill: "#ffffff",
+                      stroke: "#7c5cff",
+                      strokeWidth: 3,
+                    }}
+                    animationDuration={1400}
+                    animationEasing="ease-out"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
+          {/* Category breakdown */}
+          <motion.div
+            initial={{ opacity: 0, x: 18 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.55, delay: 0.38 }}
+            className="rounded-3xl border border-white/[0.08] bg-[#0d1018] p-5 shadow-2xl shadow-black/20 sm:p-7"
+          >
+            <div>
+              <p className="text-sm font-medium text-slate-400">
+                Distribution
+              </p>
+
+              <h2 className="mt-1 text-2xl font-bold text-white">
+                Categories
+              </h2>
+            </div>
+
+            <div className="relative mx-auto mt-4 h-[245px] w-full max-w-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+  data={categoryData}
+  dataKey="amount"
+  nameKey="category"
+  innerRadius={72}
+  outerRadius={102}
+  paddingAngle={3}
+  stroke="none"
+  onMouseEnter={(_, index) => {
+    setActiveCategory(index);
+  }}
+  onMouseLeave={() => {
+    setActiveCategory(null);
+  }}
+  animationDuration={1100}
+>
+  {categoryData.map((item, index) => {
+    const isActive = activeCategory === index;
+
+    return (
+      <Cell
+        key={item.category}
+        fill={item.fill}
+        opacity={
+          activeCategory === null || isActive
+            ? 1
+            : 0.22
+        }
+        style={{
+          transition:
+            "opacity 180ms ease, filter 180ms ease",
+          filter: isActive
+            ? `drop-shadow(0 0 10px ${item.fill})`
+            : "none",
+          cursor: "pointer",
+        }}
+      />
+    );
+  })}
+</Pie>
+
+                  <Tooltip
+                    formatter={(value) => currency(Number(value))}
+                    contentStyle={{
+                      background: "#111520",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: "12px",
+                      color: "#fff",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+
+              {/* Dynamic center */}
+              <motion.div
+                key={selectedCategory?.category ?? "total"}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+              >
+                <p className="text-xs text-slate-500">
+                  {selectedCategory ? selectedCategory.category : "Total"}
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-white">
+                  {selectedCategory
+                    ? compactCurrency(selectedCategory.amount)
+                    : compactCurrency(totalSpending)}
+                </p>
+
+                {selectedCategory && (
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">
+                    {selectedPercentage.toFixed(1)}%
+                  </p>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Interactive category list */}
+            <div className="mt-2 space-y-1">
+              {categoryData.slice(0, 5).map((item, index) => {
+                const percentage =
+                  totalSpending > 0
+                    ? (item.amount / totalSpending) * 100
+                    : 0;
+
+                const isActive = activeCategory === index;
+
+                return (
+                  <motion.div
+                    key={item.category}
+                    animate={{
+                      opacity:
+                        activeCategory === null || isActive ? 1 : 0.35,
+                      x: isActive ? 4 : 0,
+                    }}
+                    transition={{ duration: 0.15 }}
+                    onMouseEnter={() => setActiveCategory(index)}
+                    onMouseLeave={() => setActiveCategory(null)}
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors ${
+                      isActive ? "bg-white/[0.04]" : ""
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{
+                          background: item.fill,
+                          boxShadow: isActive
+                            ? `0 0 10px ${item.fill}`
+                            : "none",
+                        }}
+                      />
+
+                      <span
+                        className={`truncate text-sm ${
+                          isActive ? "text-white" : "text-slate-300"
+                        }`}
+                      >
+                        {item.category}
+                      </span>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-slate-500">
+                        {percentage.toFixed(0)}%
+                      </span>
+
+                      <span className="text-sm font-semibold text-white">
+                        {compactCurrency(item.amount)}
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Smart insight */}
+        {topCategory && (
+          <motion.section
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.48 }}
+            className="relative overflow-hidden rounded-3xl border border-[#7c5cff]/20 bg-gradient-to-br from-[#17122c] via-[#101522] to-[#0d1018] p-6 shadow-2xl shadow-[#7c5cff]/5 sm:p-8"
+          >
+            <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#7c5cff]/15 blur-[90px]" />
+
+            <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#7c5cff]/15 text-xl text-[#a993ff]">
+                  ✦
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-[#a993ff]">
+                    Smart insight
+                  </p>
+
+                  <p className="mt-2 max-w-2xl text-lg leading-7 text-white">
+                    <span className="font-semibold">
+                      {topCategory.category}
+                    </span>{" "}
+                    is your largest spending category at{" "}
+                    <span className="font-semibold">
+                      {currency(topCategory.amount)}
+                    </span>
+                    , representing{" "}
+                    <span className="font-semibold">
+                      {topCategoryPercentage.toFixed(1)}%
+                    </span>{" "}
+                    of your total recorded spending.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="/chat"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#7c5cff] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#7c5cff]/20 transition hover:bg-[#8b70ff] hover:shadow-[#7c5cff]/30"
+              >
+                Ask SmartSpend
+                <span>→</span>
+              </a>
+            </div>
+          </motion.section>
+        )}
+      </div>
+    </div>
+  );
+}

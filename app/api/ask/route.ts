@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { buildSpendingOverview } from "@/lib/spendingOverview";
 
 const NVIDIA_API_URL =
   "https://integrate.api.nvidia.com/v1";
@@ -56,6 +58,10 @@ type QueryRoute =
       type: "monthly_breakdown";
       startDate: string | null;
       endDate: string | null;
+    }
+  | {
+      // Broad / advice questions: answered from a summary of ALL transactions
+      type: "overview";
     }
   | {
       type: "rag";
@@ -235,14 +241,46 @@ function getDateRange(
   };
 }
 
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/*
+ * Finds the category a question is about.
+ * Real category names from the database win (so new or renamed
+ * categories work); the alias list covers casual words like "food".
+ */
 function detectCategory(
-  question: string
+  question: string,
+  knownCategories: string[] = []
 ): string | null {
   const lowerQuestion = question.toLowerCase();
+
+  const byLength = [...knownCategories].sort(
+    (a, b) => b.length - a.length
+  );
+
+  for (const category of byLength) {
+    const pattern = new RegExp(
+      `(?<![\\w])${escapeRegExp(category.toLowerCase())}(?![\\w])`
+    );
+
+    if (pattern.test(lowerQuestion)) {
+      return category;
+    }
+  }
 
   for (const [alias, category] of Object.entries(
     CATEGORY_ALIASES
   )) {
+    // Skip aliases whose category was renamed away
+    if (
+      knownCategories.length > 0 &&
+      !knownCategories.includes(category)
+    ) {
+      continue;
+    }
+
     const pattern = new RegExp(
       `\\b${alias}\\b`,
       "i"
@@ -254,6 +292,27 @@ function detectCategory(
   }
 
   return null;
+}
+
+async function loadKnownCategories(): Promise<string[]> {
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from("merchants")
+      .select("category");
+
+    if (error) throw error;
+
+    return [
+      ...new Set(
+        (data ?? [])
+          .map((row) => row.category as string)
+          .filter(Boolean)
+      ),
+    ];
+  } catch (error) {
+    console.error("Could not load categories:", error);
+    return [];
+  }
 }
 
 function detectTransactionType(
@@ -281,12 +340,16 @@ function detectTransactionType(
 }
 
 function detectQueryRoute(
-  question: string
+  question: string,
+  knownCategories: string[]
 ): QueryRoute {
   const lowerQuestion = question.toLowerCase();
 
   const dateRange = getDateRange(question);
-  const category = detectCategory(question);
+  const category = detectCategory(
+    question,
+    knownCategories
+  );
 
   const asksForCategoryBreakdown =
     lowerQuestion.includes(
@@ -358,6 +421,26 @@ function detectQueryRoute(
     };
   }
 
+  /*
+   * Advice-style questions ("how can I cut back?", "what should I
+   * watch out for?") need the whole picture, never a handful of
+   * similar transactions.
+   */
+  const asksForAdvice =
+    /\b(reduce|reducing|cut down|cut back|cut my|save money|saving money|save more|tips?|advice|advise|suggest|suggestions?|recommend|recommendations?|improve|budget|budgeting|overspend|overspending|waste|wasting|habits?|patterns?|look out for|watch out for|analy[sz]e|insights?|overview|summari[sz]e|summary)\b/i.test(
+      lowerQuestion
+    );
+
+  // "entire", "overall", "in general"... — broad scope
+  const asksAboutEverything =
+    /\b(entire|overall|in general|generally|all of my|all my|whole|everything|across the board)\b/i.test(
+      lowerQuestion
+    );
+
+  if (asksForAdvice) {
+    return { type: "overview" };
+  }
+
   const isAggregateQuestion =
     lowerQuestion.includes("how much") ||
     lowerQuestion.includes("how much have") ||
@@ -382,6 +465,11 @@ function detectQueryRoute(
       startDate: dateRange.startDate,
       endDate: dateRange.endDate,
     };
+  }
+
+  // Broad, non-numeric questions also get the full picture
+  if (asksAboutEverything) {
+    return { type: "overview" };
   }
 
   return {
@@ -578,7 +666,7 @@ async function retrieveTransactions(
       "match_transaction_embeddings_filtered",
       {
         query_embedding: embedding,
-        match_count: 8,
+        match_count: 12,
         category_filter: category,
         type_filter: type,
       }
@@ -587,46 +675,30 @@ async function retrieveTransactions(
   return data;
 }
 
-async function generateAnswer(
+/*
+ * How replies should look. The chat page renders this subset of
+ * Markdown (headings, bold, bullet and numbered lists).
+ */
+const FORMAT_RULES = `
+Formatting:
+- Write in Markdown. Use **bold** for key amounts, merchants and categories.
+- Use "- " bullet points for lists and "1. " for ordered steps. Indent sub-points by two spaces.
+- For longer answers, group points under short "### " headings.
+- Never use tables, code blocks or horizontal rules.
+- Format money like ₹1,23,456 (Indian digit grouping). Write dates like 26 Jan 2026.
+- Do not add disclaimers or footnotes about the data unless it genuinely cannot answer the question.
+`;
+
+async function callChatModel(
+  systemPrompt: string,
   question: string,
-  transactions: RetrievedTransaction[]
+  maxTokens: number
 ) {
   const apiKey = process.env.NVIDIA_API_KEY;
 
   if (!apiKey) {
     throw new Error("Missing NVIDIA_API_KEY");
   }
-
-  const context = transactions.length
-    ? transactions
-        .map(
-          (transaction, index) =>
-            `[Source ${index + 1}]
-Transaction ID: ${transaction.transaction_id}
-Similarity: ${transaction.similarity.toFixed(4)}
-${transaction.content}`
-        )
-        .join("\n\n")
-    : "No matching transactions were found.";
-
-  const systemPrompt = `
-You are SmartSpend, a personal expense analysis assistant.
-
-Answer the user's question using ONLY the transaction data provided below.
-
-Rules:
-- Do not invent transactions, amounts, dates, merchants, categories, or other facts.
-- Do not use outside knowledge.
-- If the supplied transactions do not contain enough information to answer, say so clearly.
-- Do not claim that the retrieved transactions represent every transaction unless the data explicitly proves that.
-- Keep the answer concise and useful.
-- When relevant, mention the merchant, amount, date, and category from the supplied data.
-- If the user asks for related transactions, list only transactions present in the supplied data.
-- Do not add transactions that are not present in the supplied data.
-
-Transaction data:
-${context}
-`;
 
   let response: Response | null = null;
   let data: ChatResponse = {};
@@ -654,7 +726,7 @@ ${context}
           ],
           temperature: 0.2,
           top_p: 0.95,
-          max_tokens: 500,
+          max_tokens: maxTokens,
           stream: false,
           chat_template_kwargs: {
             enable_thinking: false,
@@ -704,7 +776,72 @@ ${context}
     );
   }
 
-  return answer;
+  return answer.trim();
+}
+
+/* Search questions: answer from the closest matching transactions */
+async function generateAnswer(
+  question: string,
+  transactions: RetrievedTransaction[]
+) {
+  const context = transactions.length
+    ? transactions
+        .map(
+          (transaction, index) =>
+            `[Source ${index + 1}]
+Transaction ID: ${transaction.transaction_id}
+Similarity: ${transaction.similarity.toFixed(4)}
+${transaction.content}`
+        )
+        .join("\n\n")
+    : "No matching transactions were found.";
+
+  const systemPrompt = `
+You are SmartSpend, a personal expense analysis assistant.
+
+Answer the user's question using ONLY the transaction data provided below.
+These are the transactions most relevant to the question, found by search.
+
+Rules:
+- Do not invent transactions, amounts, dates, merchants, categories, or other facts.
+- Do not use outside knowledge.
+- If the supplied transactions do not contain enough information to answer, say so clearly in one sentence.
+- Do not claim the supplied transactions are every transaction, and do not state totals across all spending from them.
+- Keep the answer concise and useful.
+- When relevant, mention the merchant, amount, date, and category from the supplied data.
+- If the user asks for related transactions, list only transactions present in the supplied data.
+${FORMAT_RULES}
+Transaction data:
+${context}
+`;
+
+  return callChatModel(systemPrompt, question, 600);
+}
+
+/* Broad / advice questions: answer from a summary of every transaction */
+async function generateOverviewAnswer(
+  question: string,
+  brief: string
+) {
+  const systemPrompt = `
+You are SmartSpend, a friendly, practical personal finance coach for a user in India.
+
+You are given a summary of the user's COMPLETE transaction history (every transaction SmartSpend has recorded, condensed into totals, categories, merchants, recurring payments and trends). Use it to answer the question.
+
+Rules:
+- Base every observation on numbers from the summary. Quote specific amounts, merchants and categories.
+- Do not invent transactions, merchants or figures that are not in the summary.
+- Prioritise: lead with the 2–4 changes that would save the most money, with a rough monthly saving for each where the data supports it.
+- Then mention patterns worth watching (recurring payments, many small payments, categories that are rising, large one-off spends).
+- General money advice is fine when it follows from the data, but keep it short and concrete — no generic lectures.
+- The summary covers all recorded transactions, so do not say the data is partial or only a sample.
+- Aim for roughly 200–350 words.
+${FORMAT_RULES}
+Spending summary:
+${brief}
+`;
+
+  return callChatModel(systemPrompt, question, 1100);
 }
 
 export async function POST(request: Request) {
@@ -724,8 +861,12 @@ export async function POST(request: Request) {
 
     const trimmedQuestion = question.trim();
 
+    const knownCategories =
+      await loadKnownCategories();
+
     const route = detectQueryRoute(
-      trimmedQuestion
+      trimmedQuestion,
+      knownCategories
     );
 
     /*
@@ -906,6 +1047,31 @@ export async function POST(request: Request) {
     }
 
     /*
+     * OVERVIEW ROUTE:
+     * Broad or advice questions are answered from a summary of
+     * every transaction rather than a few search matches.
+     */
+    if (route.type === "overview") {
+      const overview = await buildSpendingOverview();
+
+      const answer = await generateOverviewAnswer(
+        trimmedQuestion,
+        overview.brief
+      );
+
+      return NextResponse.json({
+        answer,
+        sources: [],
+        route: "overview",
+        data: {
+          transactionCount: overview.transactionCount,
+          startDate: overview.startDate,
+          endDate: overview.endDate,
+        },
+      });
+    }
+
+    /*
      * RAG ROUTE:
      * Semantic questions use vector retrieval.
      *
@@ -923,8 +1089,10 @@ export async function POST(request: Request) {
         trimmedQuestion
       );
 
-    const category =
-      detectCategory(trimmedQuestion);
+    const category = detectCategory(
+      trimmedQuestion,
+      knownCategories
+    );
 
     const transactionType =
       detectTransactionType(trimmedQuestion);

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "SmartSpend",
@@ -14,11 +14,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 text-gray-900">
-        <Navbar />
-        <main className="mx-auto max-w-7xl px-6 py-8">
-          {children}
-        </main>
+      <body className="text-foreground">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

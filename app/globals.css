@@ -1,19 +1,59 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/*
+ * SmartSpend theme — dark glass on deep green.
+ * Every colour used by the shell and dashboard lives here.
+ */
 :root {
-  --background: #0a0a0a;
-  --foreground: #f5f5f5;
-  --muted: #a1a1aa;
-  --border: #27272a;
-  --card: #ffffff;
-  --card-foreground: #111111;
+  --background: #0a0d0c;
+  --foreground: #f2f5f3;
+
+  /* Panels: translucent layers over the green glow */
+  --panel: rgba(36, 48, 44, 0.55);
+  --panel-solid: #1a2320;
+  --panel-raised: rgba(52, 68, 62, 0.55);
+  --panel-border: rgba(255, 255, 255, 0.06);
+
+  --muted: #a7b3ae;
+  --muted-foreground: #6f7c77;
+
+  /* Accents taken from the reference design */
+  --accent: #3fae8f;         /* emerald — primary actions, active nav */
+  --accent-strong: #2f9a7c;
+  --violet: #8b7cf6;         /* highlighted bars, expense */
+  --lime: #d4f27a;           /* second chart colour */
+  --sky: #7cc4e8;            /* fourth chart colour */
+
+  --success: #3fae8f;
+  --danger: #f08a8a;
+
+  /* Kept for pages that still use the old names */
+  --surface: var(--panel-solid);
+  --surface-elevated: #222d29;
+  --primary: var(--violet);
+  --secondary: var(--accent);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-panel: var(--panel);
+  --color-panel-solid: var(--panel-solid);
+  --color-panel-raised: var(--panel-raised);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-violet: var(--violet);
+  --color-lime: var(--lime);
+  --color-sky: var(--sky);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
@@ -26,7 +66,44 @@ html {
 
 body {
   margin: 0;
-  background: var(--background);
+  min-height: 100vh;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(60rem 40rem at 0% 70%, rgba(47, 154, 124, 0.22), transparent 70%),
+    radial-gradient(50rem 36rem at 100% 0%, rgba(47, 154, 124, 0.14), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(63, 174, 143, 0.4);
+  color: white;
+}
+
+/* Glass panel used by every dashboard card */
+.glass {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 40px -24px rgba(0, 0, 0, 0.6);
+}
+
+/* Thin, quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,362 +1,310 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { motion } from "motion/react";
+import {
+  AnimatedNumber,
+  Avatar,
+  ErrorPanel,
+  LoadingBlocks,
+  PageHeader,
+  Pills,
+  buttonGhost,
+  inputBase,
+  selectBase,
+} from "@/components/ui";
+import {
+  colorFor,
+  compactInr,
+  fetchAllTransactions,
+  fullDate,
+  inr,
+  signedAmount,
+  signedInr,
+  type Txn,
+} from "@/lib/transactions";
 
-type ApiTransaction = {
-  id: number;
-  bank: string;
-  amount: number;
-  type: "debit" | "credit";
-  raw_merchant: string;
-  transaction_date: string | null;
-  confidence: number;
-  merchant_id: number | null;
-  merchants:
-    | {
-        canonical_name: string;
-        category: string;
-        category_source: string;
-      }
-    | {
-        canonical_name: string;
-        category: string;
-        category_source: string;
-      }[]
-    | null;
-};
+type TypeFilter = "all" | "debit" | "credit";
+type Sort = "newest" | "oldest" | "largest" | "smallest";
 
-type Transaction = {
-  id: number;
-  merchant: string;
-  amount: number;
-  category: string;
-  date: string;
-  type: "debit" | "credit";
-};
+const TYPE_OPTIONS: Array<{ id: TypeFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "debit", label: "Spent" },
+  { id: "credit", label: "Received" },
+];
 
-export default function Transactions() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
-  const [sort, setSort] = useState("newest");
-  const [loading, setLoading] = useState(true);
+const PAGE_SIZE = 50;
+
+// useSearchParams needs a Suspense boundary when the page is prerendered
+export default function TransactionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <Transactions />
+    </Suspense>
+  );
+}
+
+function Transactions() {
+  // A search term from the top search bar arrives as ?search=...
+  const searchParam = useSearchParams().get("search") ?? "";
+  const [lastSearchParam, setLastSearchParam] = useState(searchParam);
+
+  const [transactions, setTransactions] = useState<Txn[] | null>(null);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState(searchParam);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState<Sort>("newest");
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  // A new search from the top bar replaces whatever is typed here
+  if (searchParam !== lastSearchParam) {
+    setLastSearchParam(searchParam);
+    setSearch(searchParam);
+  }
 
   useEffect(() => {
-    async function fetchTransactions() {
-      try {
-        setLoading(true);
-
-        const firstResponse = await fetch(
-          "/api/transactions?page=1&limit=100"
-        );
-
-        if (!firstResponse.ok) {
-          throw new Error("Failed to fetch transactions");
-        }
-
-        const firstResult = await firstResponse.json();
-
-        const allTransactions = [...firstResult.data];
-        const totalPages = firstResult.pagination.totalPages;
-
-        if (totalPages > 1) {
-          const remainingRequests = [];
-
-          for (let page = 2; page <= totalPages; page++) {
-            remainingRequests.push(
-              fetch(`/api/transactions?page=${page}&limit=100`).then(
-                (response) => {
-                  if (!response.ok) {
-                    throw new Error("Failed to fetch transactions");
-                  }
-
-                  return response.json();
-                }
-              )
-            );
-          }
-
-          const remainingResults = await Promise.all(remainingRequests);
-
-          for (const result of remainingResults) {
-            allTransactions.push(...result.data);
-          }
-        }
-
-        const formattedTransactions: Transaction[] =
-          allTransactions.map((transaction: ApiTransaction) => {
-            const merchant = Array.isArray(transaction.merchants)
-              ? transaction.merchants[0]
-              : transaction.merchants;
-
-            return {
-              id: transaction.id,
-              merchant:
-                merchant?.canonical_name ||
-                transaction.raw_merchant,
-              amount: Number(transaction.amount),
-              category: merchant?.category || "Other",
-              date: transaction.transaction_date || "",
-              type: transaction.type,
-            };
-          });
-
-        setTransactions(formattedTransactions);
-      } catch (error) {
-        console.error(error);
+    fetchAllTransactions()
+      .then(setTransactions)
+      .catch((err) => {
+        console.error(err);
         setError("Unable to load transactions.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchTransactions();
+      });
   }, []);
 
-  const categories = useMemo(() => {
-    const uniqueCategories = Array.from(
-      new Set(
-        transactions.map(
-          (transaction) => transaction.category
-        )
-      )
+  const categories = useMemo(
+    () => [...new Set((transactions ?? []).map((t) => t.category))].sort(),
+    [transactions],
+  );
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = (transactions ?? []).filter(
+      (t) =>
+        (typeFilter === "all" || t.type === typeFilter) &&
+        (category === "All" || t.category === category) &&
+        (!query || t.merchant.toLowerCase().includes(query) || t.bank.toLowerCase().includes(query)),
     );
 
-    return uniqueCategories.sort();
-  }, [transactions]);
-
-  const filteredTransactions = useMemo(() => {
-    let result = transactions.filter((transaction) => {
-      const matchesSearch = transaction.merchant
-        .toLowerCase()
-        .includes(search.toLowerCase());
-
-      const matchesCategory =
-        category === "All" ||
-        transaction.category === category;
-
-      return matchesSearch && matchesCategory;
+    return result.sort((a, b) => {
+      switch (sort) {
+        case "oldest":
+          return a.date.getTime() - b.date.getTime();
+        case "largest":
+          return b.amount - a.amount;
+        case "smallest":
+          return a.amount - b.amount;
+        default:
+          return b.date.getTime() - a.date.getTime();
+      }
     });
+  }, [transactions, search, typeFilter, category, sort]);
 
-    result = [...result].sort((a, b) => {
-      if (sort === "newest") {
-        return b.date.localeCompare(a.date);
-      }
-
-      if (sort === "oldest") {
-        return a.date.localeCompare(b.date);
-      }
-
-      if (sort === "highest") {
-        return b.amount - a.amount;
-      }
-
-      return a.amount - b.amount;
-    });
-
-    return result;
-  }, [transactions, search, category, sort]);
+  // Totals for whatever is currently filtered
+  const totals = useMemo(() => {
+    let moneyIn = 0;
+    let moneyOut = 0;
+    for (const t of filtered) {
+      if (t.type === "credit") moneyIn += t.amount;
+      else moneyOut += t.amount;
+    }
+    return { moneyIn, moneyOut, net: moneyIn - moneyOut };
+  }, [filtered]);
 
   function exportCSV() {
-    const headers = ["Merchant", "Category", "Date", "Amount"];
-
-    const rows = filteredTransactions.map((transaction) => [
-      transaction.merchant,
-      transaction.category,
-      transaction.date
-        ? new Date(
-            transaction.date
-          ).toLocaleDateString("en-IN")
-        : "",
-      transaction.amount,
+    const headers = ["Date", "Merchant", "Category", "Bank", "Type", "Amount"];
+    const rows = filtered.map((t) => [
+      t.date.toISOString().slice(0, 10),
+      t.merchant,
+      t.category,
+      t.bank,
+      t.type,
+      signedAmount(t).toFixed(2),
     ]);
-
     const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((value) =>
-            `"${String(value).replace(/"/g, '""')}"`
-          )
-          .join(",")
-      )
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
       .join("\n");
 
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const link = document.createElement("a");
-
     link.href = url;
     link.download = "smartspend-transactions.csv";
     link.click();
-
     URL.revokeObjectURL(url);
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white">
-            Transactions
-          </h1>
-
-          <p className="mt-1 text-zinc-400">
-            Search, filter, and explore your spending history.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-zinc-600">
-          Loading transactions...
-        </div>
-      </div>
-    );
-  }
+  const header = (
+    <PageHeader title="Transactions" subtitle="Search, filter and export everything SmartSpend has picked up from your bank SMS.">
+      {transactions && (
+        <button type="button" onClick={exportCSV} className={buttonGhost}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+          </svg>
+          Export CSV
+        </button>
+      )}
+    </PageHeader>
+  );
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white">
-            Transactions
-          </h1>
-
-          <p className="mt-1 text-zinc-400">
-            Search, filter, and explore your spending history.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-red-200 bg-white p-8 text-center text-red-600">
-          {error}
-        </div>
+      <div className="space-y-8">
+        {header}
+        <ErrorPanel message={error} />
       </div>
     );
   }
 
+  if (!transactions) {
+    return (
+      <div className="space-y-8">
+        {header}
+        <LoadingBlocks heights={[96, 120, 520]} />
+      </div>
+    );
+  }
+
+  const shown = filtered.slice(0, visible);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">
-          Transactions
-        </h1>
+      {header}
 
-        <p className="mt-1 text-zinc-400">
-          Search, filter, and explore your spending history.
-        </p>
+      {/* Totals for the current filter */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        {[
+          { label: "Money in", value: totals.moneyIn, color: "text-[#7fdcc0]", format: (v: number) => `+${inr(v)}`, short: (v: number) => `+${compactInr(v)}` },
+          { label: "Money out", value: totals.moneyOut, color: "text-[#b9aefc]", format: (v: number) => `−${inr(v)}`, short: (v: number) => `−${compactInr(v)}` },
+          {
+            label: "Net",
+            value: totals.net,
+            color: totals.net >= 0 ? "text-[#7fdcc0]" : "text-[#f08a8a]",
+            format: (v: number) => signedInr(v, 0),
+            short: (v: number) => (v >= 0 ? "+" : "") + compactInr(v),
+          },
+        ].map((card, index) => (
+          <motion.div
+            key={card.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+            className="glass min-w-0 rounded-[24px] px-4 py-4 sm:px-6 sm:py-5"
+          >
+            <p className="truncate text-xs text-[#a7b3ae] sm:text-sm">{card.label}</p>
+            <p className={`mt-1 truncate text-base font-semibold tracking-tight sm:text-2xl ${card.color}`}>
+              {/* Short form on phones (₹4.8L), full figure from tablet up */}
+              <span className="sm:hidden">
+                <AnimatedNumber value={card.value} format={card.short} />
+              </span>
+              <span className="hidden sm:inline">
+                <AnimatedNumber value={card.value} format={card.format} />
+              </span>
+            </p>
+          </motion.div>
+        ))}
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 md:flex-row">
-        <input
-          type="text"
-          placeholder="Search merchant..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black placeholder:text-zinc-500 outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-        />
-
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-        >
-          <option value="All">All</option>
-
-          {categories.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="highest">Highest amount</option>
-          <option value="lowest">Lowest amount</option>
-        </select>
-
-        <button
-          onClick={exportCSV}
-          className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 active:scale-[0.98]"
-        >
-          Export CSV
-        </button>
+      <div className="glass flex flex-col gap-4 rounded-[28px] p-4 lg:flex-row lg:items-center">
+        <Pills label="Transaction type" options={TYPE_OPTIONS} value={typeFilter} onChange={setTypeFilter} size="sm" />
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+          <input
+            type="search"
+            placeholder="Search merchant or bank"
+            aria-label="Search merchant or bank"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setVisible(PAGE_SIZE);
+            }}
+            className={`${inputBase} w-full min-w-0 sm:flex-1`}
+          />
+          <select
+            aria-label="Category"
+            value={category}
+            onChange={(event) => {
+              setCategory(event.target.value);
+              setVisible(PAGE_SIZE);
+            }}
+            className={selectBase}
+          >
+            <option value="All">All categories</option>
+            {categories.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <select aria-label="Sort" value={sort} onChange={(event) => setSort(event.target.value as Sort)} className={selectBase}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="largest">Largest amount</option>
+            <option value="smallest">Smallest amount</option>
+          </select>
+        </div>
       </div>
 
-      {/* Transaction table */}
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      {/* List */}
+      <div className="glass overflow-hidden rounded-[28px]">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-zinc-900">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-700">
-              <tr>
-                <th className="px-6 py-4 font-semibold">
-                  Merchant
-                </th>
-
-                <th className="px-6 py-4 font-semibold">
-                  Category
-                </th>
-
-                <th className="px-6 py-4 font-semibold">
-                  Date
-                </th>
-
-                <th className="px-6 py-4 text-right font-semibold">
-                  Amount
-                </th>
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-[#8a9691]">
+              <tr className="border-b border-white/[0.06]">
+                <th className="px-6 py-4 font-normal">Merchant</th>
+                <th className="px-4 py-4 font-normal">Category</th>
+                <th className="px-4 py-4 font-normal">Bank</th>
+                <th className="px-4 py-4 font-normal">Date</th>
+                <th className="px-6 py-4 text-right font-normal">Amount</th>
               </tr>
             </thead>
-
             <tbody>
-              {filteredTransactions.map((transaction) => (
-                <tr
-                  key={transaction.id}
-                  className="border-b border-zinc-100 transition-colors last:border-0 hover:bg-zinc-50"
-                >
-                  <td className="px-6 py-4 font-medium text-zinc-950">
-                    {transaction.merchant}
-                  </td>
-
-                  <td className="px-6 py-4 text-zinc-700">
-                    {transaction.category}
-                  </td>
-
-                  <td className="px-6 py-4 text-zinc-500">
-                    {transaction.date
-                      ? new Date(
-                          transaction.date
-                        ).toLocaleDateString("en-IN")
-                      : "-"}
-                  </td>
-
-                  <td className="px-6 py-4 text-right font-semibold text-zinc-950">
-                    ₹{transaction.amount.toLocaleString("en-IN")}
-                  </td>
-                </tr>
-              ))}
+              {shown.map((t) => {
+                const value = signedAmount(t);
+                return (
+                  <tr key={t.id} className="border-b border-white/[0.04] transition-colors last:border-0 hover:bg-white/[0.03]">
+                    <td className="px-6 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <Avatar label={t.merchant} color={colorFor(t.category)} size={36} />
+                        <span className="font-medium text-white">{t.merchant}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1 text-xs text-[#c8d1cd]">
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: colorFor(t.category) }} />
+                        {t.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-[#a7b3ae]">{t.bank}</td>
+                    <td className="px-4 py-3.5 text-[#a7b3ae]">{fullDate(t.date)}</td>
+                    <td
+                      className={`px-6 py-3.5 text-right font-semibold tabular-nums ${
+                        value >= 0 ? "text-[#7fdcc0]" : "text-white"
+                      }`}
+                    >
+                      {signedInr(value)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {filteredTransactions.length === 0 && (
-          <div className="p-8 text-center text-zinc-500">
-            No transactions found.
+        {filtered.length === 0 && <div className="p-10 text-center text-[#a7b3ae]">No transactions match these filters.</div>}
+
+        {filtered.length > visible && (
+          <div className="border-t border-white/[0.06] p-4 text-center">
+            <button type="button" onClick={() => setVisible((v) => v + PAGE_SIZE)} className={buttonGhost}>
+              Show {Math.min(PAGE_SIZE, filtered.length - visible)} more
+            </button>
           </div>
         )}
       </div>
 
-      <div className="text-sm text-zinc-400">
-        Showing {filteredTransactions.length} of{" "}
-        {transactions.length} transactions
-      </div>
+      <p className="text-sm text-[#8a9691]">
+        Showing {shown.length} of {filtered.length} matching · {transactions.length} total
+      </p>
     </div>
   );
 }
