@@ -7,7 +7,7 @@
  * whole picture. This file reads every transaction and condenses it
  * into a brief the model can reason over.
  */
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Row = {
   amount: number | string;
@@ -35,8 +35,7 @@ export type SpendingOverview = {
 
 const PAGE = 1000; // PostgREST's default row cap per request
 
-async function loadAllTransactions(): Promise<Txn[]> {
-  const supabase = getSupabaseAdmin();
+async function loadAllTransactions(supabase: SupabaseClient): Promise<Txn[]> {
   const rows: Row[] = [];
 
   for (let from = 0; ; from += PAGE) {
@@ -85,8 +84,9 @@ function sumBy<T>(items: T[], key: (item: T) => string, value: (item: T) => numb
     .sort((a, b) => b.total - a.total);
 }
 
-export async function buildSpendingOverview(): Promise<SpendingOverview> {
-  return summarizeTransactions(await loadAllTransactions());
+/** `supabase` must be the logged-in user's client (RLS scopes it to their account). */
+export async function buildSpendingOverview(supabase: SupabaseClient): Promise<SpendingOverview> {
+  return summarizeTransactions(await loadAllTransactions(supabase));
 }
 
 /** Pure summary of a list of transactions (sorted oldest first). */

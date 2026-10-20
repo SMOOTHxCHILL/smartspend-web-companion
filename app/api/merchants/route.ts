@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireUser } from "@/lib/supabaseServer";
 import { refreshEmbeddingsForMerchants } from "@/lib/embeddings";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+  const { supabase } = auth;
+
   try {
     const { data, error } = await supabase
       .from("merchants")
@@ -51,6 +54,9 @@ export async function GET() {
  * sees the new category.
  */
 export async function PATCH(request: Request) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+
   let body: {
     merchantIds?: unknown;
     renameFrom?: unknown;
@@ -73,7 +79,8 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const admin = getSupabaseAdmin();
+    // Runs as the user: RLS limits every query below to their account
+    const admin = auth.supabase;
     let merchantIds: number[];
 
     if (typeof body.renameFrom === "string" && body.renameFrom.trim()) {
@@ -120,7 +127,7 @@ export async function PATCH(request: Request) {
     let warning: string | undefined;
 
     try {
-      reembedded = await refreshEmbeddingsForMerchants(merchantIds);
+      reembedded = await refreshEmbeddingsForMerchants(admin, merchantIds);
     } catch (embeddingError) {
       console.error("Embedding refresh failed:", embeddingError);
       warning =

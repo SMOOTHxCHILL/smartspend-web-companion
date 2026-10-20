@@ -2,10 +2,42 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-/* The name shown in the greeting. */
-const USER_NAME = "Anirudh";
+type AccountInfo = { accountName: string; phone: string; pendingInvites: number };
+
+/** The logged-in account, refreshed when the Account page changes it. */
+function useAccount(enabled: boolean) {
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+
+    const load = () =>
+      fetch("/api/account")
+        .then((response) => {
+          if (response.status === 401) {
+            window.location.assign("/login");
+            return null;
+          }
+          return response.ok ? response.json() : null;
+        })
+        .then((data) => {
+          if (!cancelled && data) setAccount(data);
+        })
+        .catch(() => {});
+
+    load();
+    window.addEventListener("smartspend:account-changed", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("smartspend:account-changed", load);
+    };
+  }, [enabled]);
+
+  return account;
+}
 
 type NavItem = {
   name: string;
@@ -57,6 +89,12 @@ const icons = {
       <path d="M8.5 9.5h7M8.5 12.5h4" />
     </svg>
   ),
+  user: (
+    <svg {...iconProps}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  ),
   search: (
     <svg {...iconProps} width={18} height={18}>
       <circle cx="11" cy="11" r="7" />
@@ -74,6 +112,7 @@ const mainNav: NavItem[] = [
 const secondaryNav: NavItem[] = [
   { name: "Categories", href: "/categories", icon: icons.tag },
   { name: "Ask SmartSpend", href: "/chat", icon: icons.chat },
+  { name: "Account", href: "/account", icon: icons.user },
 ];
 
 function Logo() {
@@ -148,8 +187,15 @@ function SearchBar() {
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isLogin = pathname === "/login";
+  const account = useAccount(!isLogin);
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  // The login page has no navigation
+  if (isLogin) return <>{children}</>;
+
+  const displayName = account?.accountName ?? "";
 
   return (
     <div className="mx-auto min-h-screen max-w-[1440px] px-4 pb-28 sm:px-6 md:pb-10 lg:px-10">
@@ -161,14 +207,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="hidden flex-1 sm:block">
           <SearchBar />
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <Link href="/account" className="ml-auto flex items-center gap-3" title="Account">
           <span className="hidden text-lg font-medium text-white sm:inline">
-            Hi {USER_NAME}!
+            {displayName}
           </span>
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#3fae8f] to-[#1f6f5a] text-base font-semibold text-white ring-2 ring-white/10">
-            {USER_NAME.charAt(0)}
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#3fae8f] to-[#1f6f5a] text-base font-semibold text-white ring-2 ring-white/10">
+            {displayName.charAt(0).toUpperCase()}
+            {!!account?.pendingInvites && (
+              <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-[#d4f27a] ring-2 ring-[#0a0d0c]" aria-label="Pending invite" />
+            )}
           </span>
-        </div>
+        </Link>
       </header>
 
       <div className="flex gap-6 lg:gap-10">

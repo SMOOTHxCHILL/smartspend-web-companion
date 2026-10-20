@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireUser } from "@/lib/supabaseServer";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+  const { supabase } = auth;
+
   try {
     const { data, error } = await supabase.rpc(
       "get_spending_summary"

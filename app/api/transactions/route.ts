@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { requireUser } from "@/lib/supabaseServer";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+  const { supabase } = auth;
+
   try {
     const { searchParams } = new URL(request.url);
 

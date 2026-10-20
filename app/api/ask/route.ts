@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { requireUser } from "@/lib/supabaseServer";
 import { buildSpendingOverview } from "@/lib/spendingOverview";
 
 const NVIDIA_API_URL =
@@ -294,9 +295,9 @@ function detectCategory(
   return null;
 }
 
-async function loadKnownCategories(): Promise<string[]> {
+async function loadKnownCategories(supabase: SupabaseClient): Promise<string[]> {
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const { data, error } = await supabase
       .from("merchants")
       .select("category");
 
@@ -477,55 +478,34 @@ function detectQueryRoute(
   };
 }
 
+/*
+ * Calls a Postgres function AS the logged-in user. The functions run with
+ * the caller's rights, so Row Level Security limits them to that user's
+ * account.
+ */
 async function getSupabaseRpc<T>(
+  supabase: SupabaseClient,
   functionName: string,
   body: Record<string, unknown>
 ): Promise<T> {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const { data, error } = await supabase.rpc(functionName, body);
 
-  const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "Missing Supabase environment variables"
-    );
+  if (error) {
+    throw new Error(`Supabase RPC ${functionName} failed: ${error.message}`);
   }
 
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/rpc/${functionName}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      `Supabase RPC failed (${response.status}): ${JSON.stringify(
-        data
-      )}`
-    );
-  }
-
-  return data;
+  return data as T;
 }
 
 async function getSpendingTotal(
+  supabase: SupabaseClient,
   category: string | null,
   startDate: string | null,
   endDate: string | null
 ): Promise<SpendingResult> {
   const data =
     await getSupabaseRpc<SpendingResult[]>(
+      supabase,
       "get_spending_by_filter",
       {
         category_filter: category,
@@ -544,10 +524,12 @@ async function getSpendingTotal(
 }
 
 async function getCategoryBreakdown(
+  supabase: SupabaseClient,
   startDate: string | null,
   endDate: string | null
 ): Promise<CategoryResult[]> {
   return getSupabaseRpc<CategoryResult[]>(
+    supabase,
     "get_spending_by_category",
     {
       start_date: startDate,
@@ -557,10 +539,12 @@ async function getCategoryBreakdown(
 }
 
 async function getMonthlyBreakdown(
+  supabase: SupabaseClient,
   startDate: string | null,
   endDate: string | null
 ): Promise<MonthlyResult[]> {
   return getSupabaseRpc<MonthlyResult[]>(
+    supabase,
     "get_spending_by_month",
     {
       start_date: startDate,
@@ -657,12 +641,14 @@ async function generateQueryEmbedding(
 }
 
 async function retrieveTransactions(
+  supabase: SupabaseClient,
   embedding: number[],
   category: string | null,
   type: string | null
 ): Promise<RetrievedTransaction[]> {
   const data =
     await getSupabaseRpc<RetrievedTransaction[]>(
+      supabase,
       "match_transaction_embeddings_filtered",
       {
         query_embedding: embedding,
@@ -845,6 +831,10 @@ ${brief}
 }
 
 export async function POST(request: Request) {
+  const auth = await requireUser(request);
+  if (auth instanceof NextResponse) return auth;
+  const { supabase } = auth;
+
   try {
     const body = await request.json();
     const question = body?.question;
@@ -862,7 +852,7 @@ export async function POST(request: Request) {
     const trimmedQuestion = question.trim();
 
     const knownCategories =
-      await loadKnownCategories();
+      await loadKnownCategories(supabase);
 
     const route = detectQueryRoute(
       trimmedQuestion,
@@ -876,6 +866,7 @@ export async function POST(request: Request) {
      */
     if (route.type === "spending_total") {
       const result = await getSpendingTotal(
+        supabase,
         route.category,
         route.startDate,
         route.endDate
@@ -931,6 +922,7 @@ export async function POST(request: Request) {
     if (route.type === "category_breakdown") {
       const results =
         await getCategoryBreakdown(
+        supabase,
           route.startDate,
           route.endDate
         );
@@ -997,6 +989,7 @@ export async function POST(request: Request) {
     if (route.type === "monthly_breakdown") {
       const results =
         await getMonthlyBreakdown(
+        supabase,
           route.startDate,
           route.endDate
         );
@@ -1052,7 +1045,7 @@ export async function POST(request: Request) {
      * every transaction rather than a few search matches.
      */
     if (route.type === "overview") {
-      const overview = await buildSpendingOverview();
+      const overview = await buildSpendingOverview(supabase);
 
       const answer = await generateOverviewAnswer(
         trimmedQuestion,
@@ -1099,6 +1092,7 @@ export async function POST(request: Request) {
 
     const transactions =
       await retrieveTransactions(
+        supabase,
         embedding,
         category,
         transactionType

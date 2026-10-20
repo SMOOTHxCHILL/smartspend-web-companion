@@ -101,7 +101,7 @@ async function main() {
 
   const transactions = await supabaseRequest(
     "/rest/v1/transactions" +
-      "?select=id,bank,amount,type,raw_merchant,transaction_date,confidence,merchant_id,merchants(canonical_name,category,category_source)" +
+      "?select=id,account_id,bank,amount,type,raw_merchant,transaction_date,confidence,merchant_id,merchants(canonical_name,category,category_source)" +
       "&order=transaction_date.asc"
   );
 
@@ -137,6 +137,7 @@ async function main() {
 
     const rows = batch.map((transaction, index) => ({
       transaction_id: transaction.id,
+      account_id: transaction.account_id,
       content: contents[index],
       embedding: embeddings[index],
     }));

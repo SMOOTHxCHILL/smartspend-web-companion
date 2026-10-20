@@ -357,9 +357,80 @@ export default function Dashboard() {
 
   if (!stats || !month) {
     return (
-      <div className="glass rounded-[28px] p-10 text-center">
-        <h1 className="text-3xl font-medium text-white">No transactions yet</h1>
-        <p className="mt-2 text-[#a7b3ae]">Once the SmartSpend app syncs your bank SMS, your dashboard fills in here.</p>
+      <div className="glass mx-auto max-w-2xl rounded-[28px] p-7 sm:p-10">
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-[#7fd6bb]">Welcome to SmartSpend</p>
+        <h1 className="mt-2 text-3xl font-medium text-white">Let&apos;s bring in your transactions</h1>
+        <p className="mt-2 text-[#a7b3ae]">
+          Your dashboard is empty because nothing has synced to this account yet. The SmartSpend Android app reads
+          your bank SMS and sends the transactions here. It takes about two minutes:
+        </p>
+
+        <ol className="mt-7 space-y-5">
+          {[
+            {
+              title: "Download the app",
+              body: (
+                <>
+                  Open the{" "}
+                  <Link href="/account" className="text-[#7fd6bb] underline underline-offset-4">
+                    Account page
+                  </Link>{" "}
+                  on your Android phone and tap <strong className="text-white">Download APK</strong>.
+                </>
+              ),
+            },
+            {
+              title: "Install it and log in",
+              body: (
+                <>
+                  Open the downloaded file. If Android asks, allow your browser to install apps. Log in with the{" "}
+                  <strong className="text-white">same phone number</strong> you used here, and allow SMS access.
+                </>
+              ),
+            },
+            {
+              title: "Wait for the sync",
+              body: (
+                <>
+                  The app reads your bank SMS and syncs automatically. When it shows{" "}
+                  <strong className="text-white">&ldquo;Synced to your account&rdquo;</strong>, come back here and
+                  refresh this page.
+                </>
+              ),
+            },
+          ].map((step, i) => (
+            <li key={step.title} className="flex gap-4">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3fae8f]/20 text-sm font-semibold text-[#7fd6bb]">
+                {i + 1}
+              </span>
+              <div>
+                <p className="font-medium text-white">{step.title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-[#a7b3ae]">{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link
+            href="/account"
+            className="rounded-full bg-[#3fae8f] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#46bd9b]"
+          >
+            Go to Account page
+          </Link>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-white/[0.06] px-5 py-2.5 text-sm text-[#c8d1cd] hover:bg-white/[0.1]"
+          >
+            I&apos;ve synced, refresh
+          </button>
+        </div>
+
+        <p className="mt-6 text-xs leading-relaxed text-[#7d8a85]">
+          Someone already added your number to their account? Accept the invite on the Account page instead, and
+          you&apos;ll see their data right away.
+        </p>
       </div>
     );
   }
@@ -378,12 +449,16 @@ export default function Dashboard() {
       <div className="min-w-0 space-y-6">
         <PageHeader title="My Dashboard" />
         <Pills label="Transaction type" options={MODES} value={mode} onChange={setMode} />
+        <p className="-mt-2 text-sm text-[#a7b3ae]">
+          Only UPI payments are tracked. Net banking (NEFT, IMPS, RTGS) and card payments aren&apos;t included yet,
+          so income and spending here can differ from your bank statement.
+        </p>
 
         {/* Money flow */}
         <Panel className="p-6 sm:p-7" delay={0.05}>
           <PanelHeader
             title={mode === "debit" ? "Spending Flow" : "Income Flow"}
-            subtitle={`Last ${MONTHS_SHOWN} months · tap a bar to inspect it`}
+            subtitle={`Last ${MONTHS_SHOWN} months · UPI only · tap a bar to inspect it`}
             href="/reports"
           />
           <div className="pt-8">
@@ -436,7 +511,7 @@ export default function Dashboard() {
                       <AnimatedNumber value={card.value} format={(v) => inr(v)} />
                     </p>
                     <p className="mt-1 text-sm text-[#c8d1cd]">
-                      {month.label} {card.note}
+                      {month.label} UPI {card.note}
                       {inProgress ? " so far" : ""}
                     </p>
                   </div>

@@ -4,8 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { AnimatePresence, motion } from "motion/react";
 import Markdown from "@/components/Markdown";
 import { fetchAllTransactions, inr, monthKey, monthYear, type Txn } from "@/lib/transactions";
-
-const USER_NAME = "Anirudh";
+import { getMyName, saveMyName } from "@/lib/supabase";
 
 /* =========================================================
    Types
@@ -225,6 +224,31 @@ export default function Chat() {
 
   const groups = useMemo(buildQuestionGroups, []);
 
+  // The greeting uses the logged-in person's own name (saved on their login).
+  // undefined = still loading, null = not set yet (we ask for it).
+  const [userName, setUserName] = useState<string | null | undefined>(undefined);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getMyName()
+      .then(setUserName)
+      .catch(() => setUserName(null));
+  }, []);
+
+  async function submitName(event: FormEvent) {
+    event.preventDefault();
+    const clean = nameDraft.trim();
+    if (!clean) return;
+    setNameError(null);
+    try {
+      await saveMyName(clean);
+      setUserName(clean);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Couldn't save your name.");
+    }
+  }
+
   // A light snapshot for the greeting card; the page works without it
   useEffect(() => {
     fetchAllTransactions()
@@ -321,8 +345,33 @@ export default function Chat() {
             <div className="relative max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Ask SmartSpend</p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">
-                {greeting()}, {USER_NAME}.
+                {greeting()}
+                {userName ? `, ${userName}` : ""}.
               </h1>
+              {userName === null && (
+                <form onSubmit={submitName} className="mt-5 flex max-w-md flex-wrap items-center gap-2">
+                  <label htmlFor="your-name" className="w-full text-sm text-white/85">
+                    What should I call you?
+                  </label>
+                  <input
+                    id="your-name"
+                    value={nameDraft}
+                    maxLength={40}
+                    autoComplete="given-name"
+                    placeholder="Your first name"
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    className="min-w-0 flex-1 rounded-full bg-white/90 px-4 py-2 text-[#14231e] placeholder:text-[#5d6b66] focus:outline-none focus:ring-2 focus:ring-white"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!nameDraft.trim()}
+                    className="rounded-full bg-black/25 px-4 py-2 text-sm font-medium text-white hover:bg-black/35 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                  {nameError && <p className="w-full text-sm text-[#ffe0e0]">{nameError}</p>}
+                </form>
+              )}
               <p className="mt-3 text-lg text-white/85">
                 Ask anything about your spending in plain English — totals, categories, or a payment you can&apos;t quite remember.
               </p>
